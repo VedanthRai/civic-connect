@@ -35,16 +35,128 @@ const C = {
 const FONT = "'IBM Plex Mono', 'Courier New', monospace";
 const FONT_DISPLAY = "'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif";
 
+/* ═══════════════════════════════════════════════════════════
+   MULTI-AGENT SYSTEM ARCHITECTURE (Simulated)
+═══════════════════════════════════════════════════════════ */
+const SocialScraperAgent = {
+  name: "SocialPulse-V4",
+  scan: (keyword, geo) => ({
+    mentions: Math.floor(Math.random() * 150) + 20,
+    hashtags: [`#${keyword}`, "#BengaluruCivic", "#UrgentFix"],
+    sentiment_score: Math.random() * 0.8 - 0.4, // -0.4 to 0.4
+    bot_activity_index: Math.random() * 0.15
+  })
+};
+
+const NLPProcessorAgent = {
+  name: "CivicNLP-Transformer",
+  extractEntities: (text) => ["BBMP", "Whitefield", "Water Pipe"],
+  inferSeverity: (text) => text.includes("blood") || text.includes("fire") ? 9.5 : 6.0,
+  generateTags: (text) => ["infrastructure", "public_safety", "urgent"]
+};
+
+const MediaIntelligenceAgent = {
+  name: "VisionGuard-AI",
+  analyze: (mediaUrl) => ({
+    scene_classification: "Street/Urban",
+    object_detection: ["pothole", "vehicle", "pedestrian"],
+    severity_score: 0.8 + Math.random() * 0.2,
+    is_deepfake: Math.random() < 0.02, // 2% chance of fake
+    fingerprint: Math.random().toString(36).substring(7)
+  })
+};
+
+const GeoMappingAgent = {
+  name: "GeoSpatial-Cluster",
+  triangulate: (metadata, text) => ({
+    lat: 12.97 + (Math.random() * 0.01),
+    lng: 77.59 + (Math.random() * 0.01),
+    precision: "High (GPS)"
+  })
+};
+
+const MOCK_EVIDENCE_POOL = [
+  { type: "image", source: "Citizen Uploads", url: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7", confidence: 0.98, tags: ["pothole", "hazard"], severity: 7.5, isFake: false, botProb: 0.01, timestamp: "2 mins ago" },
+  { type: "image", source: "Social Media", url: "https://images.unsplash.com/photo-1566041510639-8d95a2490bfb", confidence: 0.85, tags: ["traffic", "congestion"], severity: 6.2, isFake: false, botProb: 0.12, timestamp: "15 mins ago" },
+  { type: "video", source: "CCTV", url: "https://media.istockphoto.com/id/1182602838/video/cctv-camera-recording-traffic-on-the-road.mp4?s=mp4-640x640-is&k=20&c=J-jJ_y_y_y_y", confidence: 0.99, tags: ["vehicle", "motion"], severity: 9.0, isFake: false, botProb: 0.0, timestamp: "Live Stream" },
+  { type: "image", source: "Drone", url: "https://images.unsplash.com/photo-1473968512647-3e447244af8f", confidence: 0.92, tags: ["aerial", "flood"], severity: 8.8, isFake: false, botProb: 0.0, timestamp: "1 hour ago" },
+  { type: "image", source: "Social Media", url: "https://images.unsplash.com/photo-1599939571322-792a326991f2", confidence: 0.65, tags: ["fire", "smoke"], severity: 9.5, isFake: true, botProb: 0.95, timestamp: "Just now" }, // Fake/Bot example
+];
+
+const GENERATE_EVIDENCE = (count) => Array.from({ length: count }, () => MOCK_EVIDENCE_POOL[Math.floor(Math.random() * MOCK_EVIDENCE_POOL.length)]);
+
+/* ═══════════════════════════════════════════════════════════
+   PROGRESS LOGIC — Weighted Completion Score
+═══════════════════════════════════════════════════════════ */
+const calculateProgress = (issue) => {
+  if (!issue) return { score: 0, breakdown: [] };
+  let score = 0;
+  const breakdown = [];
+
+  // 1. Lifecycle Stages (Base Layer)
+  const stages = [
+    { key: 'verified', label: 'Verified', weight: 10 },
+    { key: 'assigned', label: 'Assigned', weight: 15 },
+    { key: 'dispatched', label: 'Team Dispatched', weight: 15 },
+    { key: 'work_started', label: 'Work Started', weight: 20 },
+  ];
+
+  stages.forEach(stage => {
+    if (issue[stage.key]) {
+      score += stage.weight;
+      breakdown.push({ label: stage.label, done: true });
+    } else {
+      breakdown.push({ label: stage.label, done: false });
+    }
+  });
+
+  // 2. Real-World Signals
+  const signals = [
+    { key: 'engineer_evidence', label: 'Evidence Uploaded', weight: 10 },
+    { key: 'geo_verified', label: 'Geo-Verified', weight: 10 },
+    { condition: (i) => i.ai_validation_score > 80, label: 'AI Validated', weight: 10 },
+  ];
+
+  signals.forEach(signal => {
+    const isDone = signal.condition ? signal.condition(issue) : issue[signal.key];
+    if (isDone) score += signal.weight;
+    breakdown.push({ label: signal.label, done: !!isDone });
+  });
+
+  // 3. Completion Override
+  if (issue.citizen_confirmed) {
+    score = 100;
+    // Mark all as done if confirmed
+    breakdown.forEach(b => b.done = true);
+    // Ensure citizen confirmed is added if not present (it's implicit in 100%)
+    if (!breakdown.find(b => b.label === "Citizen Confirmed")) {
+        breakdown.push({ label: "Citizen Confirmed", done: true });
+    }
+  } else {
+      breakdown.push({ label: "Citizen Confirmed", done: false });
+  }
+
+  return { score: Math.min(score, 100), breakdown };
+};
+
 /* ═══════════════════════════════════════════════════════════ MOCK DATA */
 const ISSUES_RAW = [
-  { id: 1, title: "Pipeline burst — road flooding + traffic chaos", cat: "Water", loc: "Whitefield Main Rd", ward: "Whitefield", votes: 1847, severity: 9.8, status: "Critical", progress: 20, reports: 412, social: 8621, hashtag: "#WhitefieldFlood", authority: "BWSSB", sla: 2, slaDone: 0.4, timeMs: Date.now() - 1800000, recurrence: 3, lat: 12.9698, lng: 77.7500, aiInsight: "CRITICAL: Infrastructure failure. Emergency team required immediately.", trend: 892, manpower: 8, estHours: 6 },
-  { id: 2, title: "Massive pothole cluster causing daily accidents", cat: "Road", loc: "MG Road near Trinity Circle", ward: "Shivajinagar", votes: 1204, severity: 9.2, status: "In Progress", progress: 65, reports: 287, social: 5341, hashtag: "#MGRoadPothole", authority: "BBMP Roads", sla: 24, slaDone: 18, timeMs: Date.now() - 7200000, recurrence: 7, lat: 12.9762, lng: 77.6033, aiInsight: "High accident probability. Road closure + patching crew needed.", trend: 234, manpower: 6, estHours: 8 },
-  { id: 3, title: "Garbage overflow — 4 days uncollected, health risk", cat: "Sanitation", loc: "Koramangala 5th Block", ward: "Koramangala", votes: 912, severity: 8.7, status: "Assigned", progress: 30, reports: 198, social: 3876, hashtag: "#KoraGarbage", authority: "BBMP SWM", sla: 12, slaDone: 9, timeMs: Date.now() - 18000000, recurrence: 12, lat: 12.9352, lng: 77.6245, aiInsight: "Disease vector risk elevated. Dual vehicle dispatch needed.", trend: 67, manpower: 4, estHours: 3 },
-  { id: 4, title: "Street lights out on entire 80ft stretch — crime risk", cat: "Electricity", loc: "80 Feet Rd, Indiranagar", ward: "Indiranagar", votes: 623, severity: 7.4, status: "Pending", progress: 10, reports: 111, social: 1934, hashtag: "#IndiSafety", authority: "BESCOM", sla: 8, slaDone: 1, timeMs: Date.now() - 86400000, recurrence: 2, lat: 12.9784, lng: 77.6408, aiInsight: "Crime index +40% after dark without lighting. Priority deployment.", trend: 31, manpower: 3, estHours: 4 },
-  { id: 5, title: "Storm drain blocked — flooding risk in 2 localities", cat: "Infrastructure", loc: "JP Nagar 7th Phase", ward: "JP Nagar", votes: 534, severity: 7.1, status: "Pending", progress: 5, reports: 89, social: 1234, hashtag: "#JPNagarFlood", authority: "BBMP Engineering", sla: 16, slaDone: 2, timeMs: Date.now() - 43200000, recurrence: 4, lat: 12.9082, lng: 77.5946, aiInsight: "Pre-monsoon clearance critical. Multi-locality impact.", trend: 44, manpower: 5, estHours: 5 },
-  { id: 6, title: "Fallen tree blocking ambulance access route", cat: "Infrastructure", loc: "Jayanagar 4th Block", ward: "Jayanagar", votes: 389, severity: 8.1, status: "Pending", progress: 0, reports: 67, social: 987, hashtag: "#JayanagaEmergency", authority: "BBMP Parks", sla: 4, slaDone: 3, timeMs: Date.now() - 5400000, recurrence: 1, lat: 12.9299, lng: 77.5912, aiInsight: "Emergency access risk! Rapid response tree removal needed.", trend: 189, manpower: 4, estHours: 2 },
-  { id: 7, title: "Open manhole near school — child safety emergency", cat: "Sanitation", loc: "Hebbal Ring Road", ward: "Hebbal", votes: 1102, severity: 9.5, status: "Escalated", progress: 45, reports: 234, social: 6120, hashtag: "#HebbalManholeRisk", authority: "BBMP Engineering", sla: 3, slaDone: 1, timeMs: Date.now() - 3600000, recurrence: 0, lat: 13.0358, lng: 77.5970, aiInsight: "Child safety critical. Temporary cover + permanent fix needed.", trend: 445, manpower: 3, estHours: 1 },
-  { id: 8, title: "Transformer fire risk — sparking wires after rain", cat: "Electricity", loc: "Banashankari 2nd Stage", ward: "Banashankari", votes: 445, severity: 8.9, status: "In Progress", progress: 55, reports: 78, social: 2341, hashtag: "#BanashankariFire", authority: "BESCOM", sla: 2, slaDone: 1.5, timeMs: Date.now() - 900000, recurrence: 0, lat: 12.9387, lng: 77.5456, aiInsight: "Fire hazard. Disconnect and repair within 2 hours.", trend: 298, manpower: 4, estHours: 3 },
+  { id: 1, title: "Pipeline burst — road flooding + traffic chaos", cat: "Water", loc: "Whitefield Main Rd", ward: "Whitefield", votes: 1847, severity: 9.8, status: "Critical", reports: 412, social: 8621, hashtag: "#WhitefieldFlood", authority: "BWSSB", sla: 2, slaDone: 0.4, timeMs: Date.now() - 1800000, recurrence: 3, lat: 12.9698, lng: 77.7500, aiInsight: "CRITICAL: Infrastructure failure. Emergency team required immediately.", trend: 892, manpower: 8, estHours: 6, evidence: GENERATE_EVIDENCE(4),
+    verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: true, geo_verified: true, ai_validation_score: 92, citizen_confirmed: false },
+  { id: 2, title: "Massive pothole cluster causing daily accidents", cat: "Road", loc: "MG Road near Trinity Circle", ward: "Shivajinagar", votes: 1204, severity: 9.2, status: "In Progress", reports: 287, social: 5341, hashtag: "#MGRoadPothole", authority: "BBMP Roads", sla: 24, slaDone: 18, timeMs: Date.now() - 7200000, recurrence: 7, lat: 12.9762, lng: 77.6033, aiInsight: "High accident probability. Road closure + patching crew needed.", trend: 234, manpower: 6, estHours: 8, evidence: GENERATE_EVIDENCE(3),
+    verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: true, geo_verified: true, ai_validation_score: 85, citizen_confirmed: false },
+  { id: 3, title: "Garbage overflow — 4 days uncollected, health risk", cat: "Sanitation", loc: "Koramangala 5th Block", ward: "Koramangala", votes: 912, severity: 8.7, status: "Assigned", reports: 198, social: 3876, hashtag: "#KoraGarbage", authority: "BBMP SWM", sla: 12, slaDone: 9, timeMs: Date.now() - 18000000, recurrence: 12, lat: 12.9352, lng: 77.6245, aiInsight: "Disease vector risk elevated. Dual vehicle dispatch needed.", trend: 67, manpower: 4, estHours: 3, evidence: GENERATE_EVIDENCE(2),
+    verified: true, assigned: true, dispatched: true, work_started: false, engineer_evidence: false, geo_verified: false, ai_validation_score: 0, citizen_confirmed: false },
+  { id: 4, title: "Street lights out on entire 80ft stretch — crime risk", cat: "Electricity", loc: "80 Feet Rd, Indiranagar", ward: "Indiranagar", votes: 623, severity: 7.4, status: "Pending", reports: 111, social: 1934, hashtag: "#IndiSafety", authority: "BESCOM", sla: 8, slaDone: 1, timeMs: Date.now() - 86400000, recurrence: 2, lat: 12.9784, lng: 77.6408, aiInsight: "Crime index +40% after dark without lighting. Priority deployment.", trend: 31, manpower: 3, estHours: 4, evidence: GENERATE_EVIDENCE(1),
+    verified: true, assigned: true, dispatched: false, work_started: false, engineer_evidence: false, geo_verified: false, ai_validation_score: 0, citizen_confirmed: false },
+  { id: 5, title: "Storm drain blocked — flooding risk in 2 localities", cat: "Infrastructure", loc: "JP Nagar 7th Phase", ward: "JP Nagar", votes: 534, severity: 7.1, status: "Pending", reports: 89, social: 1234, hashtag: "#JPNagarFlood", authority: "BBMP Engineering", sla: 16, slaDone: 2, timeMs: Date.now() - 43200000, recurrence: 4, lat: 12.9082, lng: 77.5946, aiInsight: "Pre-monsoon clearance critical. Multi-locality impact.", trend: 44, manpower: 5, estHours: 5, evidence: GENERATE_EVIDENCE(2),
+    verified: true, assigned: true, dispatched: false, work_started: false, engineer_evidence: false, geo_verified: false, ai_validation_score: 0, citizen_confirmed: false },
+  { id: 6, title: "Fallen tree blocking ambulance access route", cat: "Infrastructure", loc: "Jayanagar 4th Block", ward: "Jayanagar", votes: 389, severity: 8.1, status: "Pending", reports: 67, social: 987, hashtag: "#JayanagaEmergency", authority: "BBMP Parks", sla: 4, slaDone: 3, timeMs: Date.now() - 5400000, recurrence: 1, lat: 12.9299, lng: 77.5912, aiInsight: "Emergency access risk! Rapid response tree removal needed.", trend: 189, manpower: 4, estHours: 2, evidence: GENERATE_EVIDENCE(3),
+    verified: true, assigned: true, dispatched: false, work_started: false, engineer_evidence: false, geo_verified: false, ai_validation_score: 0, citizen_confirmed: false },
+  { id: 7, title: "Open manhole near school — child safety emergency", cat: "Sanitation", loc: "Hebbal Ring Road", ward: "Hebbal", votes: 1102, severity: 9.5, status: "Escalated", reports: 234, social: 6120, hashtag: "#HebbalManholeRisk", authority: "BBMP Engineering", sla: 3, slaDone: 1, timeMs: Date.now() - 3600000, recurrence: 0, lat: 13.0358, lng: 77.5970, aiInsight: "Child safety critical. Temporary cover + permanent fix needed.", trend: 445, manpower: 3, estHours: 1, evidence: GENERATE_EVIDENCE(5),
+    verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: false, geo_verified: true, ai_validation_score: 0, citizen_confirmed: false },
+  { id: 8, title: "Transformer fire risk — sparking wires after rain", cat: "Electricity", loc: "Banashankari 2nd Stage", ward: "Banashankari", votes: 445, severity: 8.9, status: "In Progress", reports: 78, social: 2341, hashtag: "#BanashankariFire", authority: "BESCOM", sla: 2, slaDone: 1.5, timeMs: Date.now() - 900000, recurrence: 0, lat: 12.9387, lng: 77.5456, aiInsight: "Fire hazard. Disconnect and repair within 2 hours.", trend: 298, manpower: 4, estHours: 3, evidence: GENERATE_EVIDENCE(2),
+    verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: true, geo_verified: true, ai_validation_score: 75, citizen_confirmed: false },
 ];
 
 const CIVICSCORE = (issue) => {
@@ -57,7 +169,10 @@ const CIVICSCORE = (issue) => {
   return Math.min(Math.round(raw * 2.8), 100);
 };
 
-const ISSUES = ISSUES_RAW.map(i => ({ ...i, civicScore: CIVICSCORE(i) })).sort((a, b) => b.civicScore - a.civicScore);
+const ISSUES = ISSUES_RAW.map(i => {
+  const { score } = calculateProgress(i);
+  return { ...i, civicScore: CIVICSCORE(i), progress: score };
+}).sort((a, b) => b.civicScore - a.civicScore);
 
 const STATUS_META = {
   Critical: { color: C.red, icon: "⚠" },
@@ -145,6 +260,72 @@ function PulsingAlert({ color }) {
   );
 }
 
+function EvidencePanel({ evidence }) {
+  const [filter, setFilter] = useState("All");
+  const [hideBots, setHideBots] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  const safeEvidence = Array.isArray(evidence) ? evidence : [];
+  const filtered = safeEvidence.filter(e => {
+    if (filter !== "All" && e.source !== filter) return false;
+    if (hideBots && e.botProb > 0.5) return false;
+    return true;
+  });
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={filter} onChange={e => setFilter(e.target.value)} style={{ background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", fontSize: 11 }}>
+            <option value="All">All Sources</option>
+            <option value="Citizen Uploads">Citizen Uploads</option>
+            <option value="Social Media">Social Media</option>
+            <option value="CCTV">CCTV</option>
+            <option value="Drone">Drone</option>
+          </select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textDim, cursor: "pointer" }}>
+            <input type="checkbox" checked={hideBots} onChange={e => setHideBots(e.target.checked)} /> Hide Bot Content
+          </label>
+        </div>
+        <div style={{ fontSize: 10, color: C.teal }}>{filtered.length} items found</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+        {filtered.map((item, i) => (
+          <div key={i} onClick={() => setExpanded(item)} style={{ background: C.bg2, borderRadius: 8, overflow: "hidden", border: `1px solid ${item.isFake ? C.red : C.border}`, cursor: "pointer", position: "relative" }}>
+            <div style={{ height: 90, background: `url(${item.url}) center/cover`, position: "relative" }}>
+              {item.type === "video" && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.3)" }}>▶</div>}
+              {item.isFake && <div style={{ position: "absolute", top: 4, right: 4, background: C.red, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: "bold" }}>FAKE DETECTED</div>}
+            </div>
+            <div style={{ padding: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: C.textSub }}>{item.source}</span>
+                <span style={{ fontSize: 10, color: item.confidence > 0.9 ? C.green : C.amber }}>{(item.confidence * 100).toFixed(0)}% Conf</span>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {item.tags.slice(0, 2).map(t => <span key={t} style={{ fontSize: 9, background: `${C.blue}22`, color: C.blue, padding: "1px 4px", borderRadius: 4 }}>#{t}</span>)}
+              </div>
+            </div>
+          </div>
+        ))}
+        {safeEvidence.length === 0 ? (
+          <div style={{ gridColumn: "1 / -1", padding: 32, textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 12, color: C.textDim }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>📷</div>
+            <div style={{ fontSize: 13, color: C.text }}>No evidence uploaded yet.</div>
+            <div style={{ fontSize: 11 }}>Be the first to add proof of this issue.</div>
+          </div>
+        ) : (
+          filtered.length === 0 && (
+            <div style={{ gridColumn: "1 / -1", padding: 32, textAlign: "center", color: C.textDim }}>
+              No matching items found.
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ToastContainer({ toasts }) {
   return (
     <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 3000, display: "flex", flexDirection: "column", gap: 10, pointerEvents: "none" }}>
@@ -176,7 +357,7 @@ function CitizenPortal({ issues, onReport }) {
   const cats = ["All", "Road", "Sanitation", "Electricity", "Water", "Infrastructure"];
   const filtered = issues
     .filter(i => catFilter === "All" || i.cat === catFilter)
-    .filter(i => !search || i.title.toLowerCase().includes(search.toLowerCase()) || i.loc.toLowerCase().includes(search.toLowerCase()) || i.hashtag.toLowerCase().includes(search.toLowerCase()))
+    .filter(i => !search || i.title.toLowerCase().includes(search.toLowerCase()) || (i.loc && i.loc.toLowerCase().includes(search.toLowerCase())) || (i.hashtag && i.hashtag.toLowerCase().includes(search.toLowerCase())))
     .sort((a, b) => ({ civic: b.civicScore - a.civicScore, votes: (b.votes + (localVotes[b.id] || 0)) - (a.votes + (localVotes[a.id] || 0)), recent: b.timeMs - a.timeMs, severity: b.severity - a.severity })[sortBy] || 0);
 
   const handleVote = (id) => {
@@ -280,7 +461,7 @@ function CitizenPortal({ issues, onReport }) {
                 {/* Center: content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
-                    <Pill color={CAT_COLOR[issue.cat] || C.teal}>{CAT_ICON[issue.cat]} {issue.cat.toUpperCase()}</Pill>
+                    <Pill color={CAT_COLOR[issue.cat] || C.teal}>{CAT_ICON[issue.cat] || "⏳"} {issue.cat.toUpperCase()}</Pill>
                     <Pill color={sm.color}><PulsingAlert color={sm.color} /> {issue.status.toUpperCase()}</Pill>
                     <span style={{ fontSize: 11, color: C.teal, opacity: 0.7 }}>{issue.hashtag}</span>
                     <span style={{ fontSize: 10, color: C.textDim, marginLeft: "auto" }}>{timeAgo(issue.timeMs)}</span>
@@ -319,47 +500,72 @@ function CitizenPortal({ issues, onReport }) {
 ═══════════════════════════════════════════════════════════ */
 function AuthorityDashboard({ issues }) {
   const [selectedIssue, setSelectedIssue] = useState(null);
-  const [aiAction, setAiAction] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [simResult, setSimResult] = useState(null);
+  const chatEndRef = useRef(null);
 
   const sorted = [...issues].sort((a, b) => b.civicScore - a.civicScore);
   const depts = [...new Set(issues.map(i => i.authority))];
 
-  const getAiActions = async (issue) => {
-    setAiLoading(true); setAiAction("");
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `You are an AI civic authority advisor. Generate a structured action plan for this issue.
+  // Reset chat when issue changes
+  useEffect(() => {
+    if (selectedIssue) {
+      setChatHistory([{ 
+        id: "init", 
+        role: "ai", 
+        text: `**AI COMMAND ASSISTANT**\nConnected to ${selectedIssue.authority} database.\n\nIssue: ${selectedIssue.title}\nSeverity: ${selectedIssue.severity}/10\n\nI can generate response plans, draft alerts, or analyze trends. How can I help?` 
+      }]);
+      setChatInput("");
+      setIsTyping(false);
+    }
+  }, [selectedIssue]);
 
-Issue: "${issue.title}"
-Category: ${issue.cat}
-Location: ${issue.loc}, ${issue.ward}
-Civic Impact Score: ${issue.civicScore}/100
-Severity: ${issue.severity}/10
-Duplicate Reports: ${issue.reports}
-Social Media Mentions: ${issue.social}
-SLA: ${issue.sla}h (${issue.slaDone}h elapsed)
-Assigned Authority: ${issue.authority}
-Recurrence Count: ${issue.recurrence}
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory, isTyping]);
 
-Provide a CONCISE action plan with:
-1. IMMEDIATE (next 2h) — specific field actions
-2. SHORT-TERM (24h) — resolution steps
-3. PREVENTIVE — avoid recurrence
-4. ESTIMATED RESOURCES: crew size, equipment, cost range
-5. RISK if delayed
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    
+    const userText = chatInput;
+    setChatInput("");
+    setChatHistory(prev => [...prev, { id: Date.now(), role: "user", text: userText }]);
+    setIsTyping(true);
 
-Format clearly with emojis. Max 180 words.` }]
-        })
-      });
-      const data = await res.json();
-      setAiAction(data.content?.[0]?.text || "");
-    } catch { setAiAction("⚠️ AI advisor unavailable."); }
-    setAiLoading(false);
+    await new Promise(resolve => setTimeout(resolve, 1200));
+
+    let response = "";
+    const lower = userText.toLowerCase();
+    
+    if (lower.includes("plan") || lower.includes("action")) {
+        response = `**🤖 AI TACTICAL RESPONSE PLAN**\n\n` +
+        `**ISSUE:** ${selectedIssue.title}\n` +
+        `**SEVERITY:** ${selectedIssue.severity}/10 (${selectedIssue.status.toUpperCase()})\n\n` +
+        `**1. IMMEDIATE ACTIONS (0-2 Hours):**\n` +
+        `• Dispatch ${selectedIssue.manpower} member ${selectedIssue.cat} response crew to ${selectedIssue.loc}.\n` +
+        `• Alert traffic control for potential congestion in ${selectedIssue.ward}.\n` +
+        `• Send push notification to ${selectedIssue.reports} affected citizens.\n\n` +
+        `**2. RESOLUTION STRATEGY:**\n` +
+        `• Deploy heavy machinery for ${selectedIssue.cat} infrastructure repair.\n` +
+        `• Estimated resolution time: ${selectedIssue.estHours} hours.\n` +
+        `• Coordinate with ${selectedIssue.authority} for resource allocation.\n\n` +
+        `**3. PREVENTIVE MEASURES:**\n` +
+        `• Conduct root cause analysis on ${selectedIssue.cat} grid in ${selectedIssue.ward}.\n` +
+        `• Install IoT sensors for early warning of recurrence.\n\n` +
+        `**RISK ASSESSMENT:**\n` +
+        `Delay > 4 hours increases civic dissatisfaction by 15%. Act now.`;
+    } else if (lower.includes("alert") || lower.includes("notify")) {
+        response = `**📢 CITIZEN ALERT DRAFT**\n\n"Attention ${selectedIssue.ward}: ${selectedIssue.cat} service disruption detected at ${selectedIssue.loc}. Crews dispatched. ETA ${selectedIssue.estHours}h. - ${selectedIssue.authority}"`;
+    } else {
+        response = `I have logged that. I am monitoring the situation at ${selectedIssue.loc}. \n\nTry asking for an **"action plan"** or **"citizen alert"**.`;
+    }
+
+    setChatHistory(prev => [...prev, { id: Date.now()+1, role: "ai", text: response }]);
+    setIsTyping(false);
   };
 
   const simulateResolution = (topN) => {
@@ -470,7 +676,7 @@ Format clearly with emojis. Max 180 words.` }]
         {/* Side panel: AI recommended actions */}
         {selectedIssue && (
           <div style={{ background: C.card, border: `1px solid ${C.teal}44`, borderRadius: 14, padding: 18, alignSelf: "start", position: "sticky", top: 80 }}>
-            <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700, marginBottom: 10 }}>🤖 AI RECOMMENDED ACTIONS</div>
+            <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700, marginBottom: 10 }}>🤖 AI COMMAND ASSISTANT</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 6, fontFamily: FONT_DISPLAY }}>{selectedIssue.title}</div>
             <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12 }}>📍 {selectedIssue.loc} · Civic Score: {selectedIssue.civicScore}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
@@ -486,25 +692,35 @@ Format clearly with emojis. Max 180 words.` }]
                 </div>
               ))}
             </div>
-            {aiLoading && (
-              <div style={{ textAlign: "center", padding: 24, color: C.teal }}>
-                <div style={{ fontSize: 24, animation: "spin 1s linear infinite", display: "inline-block" }}>⚙</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Generating action plan...</div>
+            
+            {/* Chat Interface */}
+            <div style={{ display: "flex", flexDirection: "column", height: 400, background: C.bg2, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                {chatHistory.map(msg => (
+                  <div key={msg.id} style={{ 
+                    alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                    background: msg.role === "user" ? `${C.teal}22` : C.bg1,
+                    border: `1px solid ${msg.role === "user" ? C.teal : C.border}`,
+                    borderRadius: 8, padding: "8px 12px", maxWidth: "90%", fontSize: 12, color: C.textSub, whiteSpace: "pre-wrap"
+                  }}>
+                    {msg.role === "ai" && <span style={{ marginRight: 6 }}>🤖</span>}
+                    {msg.text}
+                  </div>
+                ))}
+                {isTyping && <div style={{ fontSize: 10, color: C.textDim, padding: "0 12px" }}>AI is typing...</div>}
+                <div ref={chatEndRef} />
               </div>
-            )}
-            {aiAction && !aiLoading && (
-              <div style={{ background: `${C.teal}0a`, border: `1px solid ${C.teal}22`, borderRadius: 10, padding: 12, fontSize: 12, color: C.textSub, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 320, overflowY: "auto" }}>
-                {aiAction}
-              </div>
-            )}
-            {!aiAction && !aiLoading && (
-              <button onClick={() => getAiActions(selectedIssue)} style={{
-                width: "100%", background: `${C.teal}22`, border: `1px solid ${C.teal}`, borderRadius: 10,
-                padding: 12, color: C.teal, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT
-              }}>
-                Generate AI Action Plan →
-              </button>
-            )}
+              <form onSubmit={handleSendMessage} style={{ display: "flex", borderTop: `1px solid ${C.border}`, padding: 8, gap: 8 }}>
+                <input 
+                  value={chatInput} 
+                  onChange={e => setChatInput(e.target.value)} 
+                  placeholder="Ask AI assistant..." 
+                  style={{ flex: 1, background: C.bg0, border: "none", borderRadius: 6, padding: "8px 10px", color: C.text, fontSize: 12, outline: "none" }}
+                />
+                <button type="submit" style={{ background: C.teal, border: "none", borderRadius: 6, padding: "0 12px", cursor: "pointer", color: "#000", fontWeight: "bold" }}>→</button>
+              </form>
+            </div>
+
             {selectedIssue.recurrence > 3 && (
               <div style={{ marginTop: 12, background: `${C.amber}11`, border: `1px solid ${C.amber}44`, borderRadius: 8, padding: "8px 10px", fontSize: 11, color: C.amber }}>
                 ⚠ RECURRING ISSUE: Reported {selectedIssue.recurrence}× in past 90 days. Recommend preventive infrastructure audit.
@@ -520,7 +736,7 @@ Format clearly with emojis. Max 180 words.` }]
 /* ═══════════════════════════════════════════════════════════
    ANALYTICS CENTER
 ═══════════════════════════════════════════════════════════ */
-function AnalyticsCenter({ issues }) {
+function AnalyticsCenter({ issues, liveStats = [], cityStats }) {
   // Chart data
   const catData = Object.entries(
     issues.reduce((acc, i) => { acc[i.cat] = (acc[i.cat] || 0) + 1; return acc; }, {})
@@ -571,8 +787,10 @@ function AnalyticsCenter({ issues }) {
     { range: "7d+", count: 6 },
   ];
 
-  const cityHealth = 100 - Math.round(issues.reduce((s, i) => s + i.civicScore, 0) / issues.length);
-  const avgCivicScore = Math.round(issues.reduce((s, i) => s + i.civicScore, 0) / issues.length);
+  // Use real-time stats from backend or fallback
+  const currentStats = liveStats.length > 0 ? liveStats[liveStats.length - 1] : (cityStats || { health: 85, risk: 15, hotspots: [] });
+  const cityHealth = currentStats.health;
+  const riskIndex = currentStats.risk;
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
@@ -600,8 +818,8 @@ function AnalyticsCenter({ issues }) {
           </div>
           <div style={{ width: 1, height: 60, background: C.border }} />
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 48, fontWeight: 900, color: avgCivicScore >= 70 ? C.red : avgCivicScore >= 50 ? C.amber : C.teal, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>{avgCivicScore}</div>
-            <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 2 }}>AVG RISK INDEX</div>
+            <div style={{ fontSize: 48, fontWeight: 900, color: riskIndex >= 70 ? C.red : riskIndex >= 50 ? C.amber : C.teal, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>{riskIndex}</div>
+            <div style={{ fontSize: 10, color: C.textDim, letterSpacing: 2 }}>RISK INDEX</div>
           </div>
         </div>
       </div>
@@ -615,6 +833,14 @@ function AnalyticsCenter({ issues }) {
             CategoryWeight: Water 1.4 · Electricity 1.35 · Sanitation 1.3 · Road 1.2 · Infrastructure 1.25 &nbsp;|&nbsp;
             Boosts capped: Engagement ≤1.8 · Duplicate ≤1.5 · Sentiment ≤1.6 · Recurrence ≤1.3
           </div>
+          {currentStats.aiExplanation && (
+            <div style={{ marginTop: 12, background: `${C.teal}11`, border: `1px solid ${C.teal}33`, borderRadius: 8, padding: 10 }}>
+              <div style={{ fontSize: 10, color: C.teal, fontWeight: 700, marginBottom: 4 }}>🤖 AI INSIGHT</div>
+              <div style={{ fontSize: 11, color: C.text }}>{currentStats.aiExplanation.risk_summary}</div>
+              <div style={{ fontSize: 11, color: C.textSub, marginTop: 4 }}>Top Factor: {currentStats.aiExplanation.top_factor}</div>
+              <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>Action: {currentStats.aiExplanation.recommended_action}</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -760,12 +986,8 @@ function AnalyticsCenter({ issues }) {
       <div style={{ background: C.card, border: `1px solid ${C.amber}44`, borderRadius: 14, padding: "16px 18px" }}>
         <div style={{ fontSize: 10, color: C.amber, letterSpacing: 2, fontWeight: 700, marginBottom: 14 }}>🔮 PREDICTIVE HOTSPOT FORECAST — NEXT 7 DAYS</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          {[
-            { ward: "Whitefield", risk: 94, reason: "Pipeline recurrence + monsoon approach", trend: "↑ 34%" },
-            { ward: "Koramangala", risk: 78, reason: "Sanitation SLA breach pattern", trend: "↑ 18%" },
-            { ward: "Hebbal", risk: 72, reason: "Storm drain + infrastructure aging", trend: "↑ 22%" },
-          ].map(h => (
-            <div key={h.ward} style={{ background: C.bg2, borderRadius: 10, padding: 14, border: `1px solid ${C.amber}33` }}>
+          {(currentStats.hotspots || []).map((h, i) => (
+            <div key={h.ward || i} style={{ background: C.bg2, borderRadius: 10, padding: 14, border: `1px solid ${C.amber}33` }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: C.text, fontFamily: FONT_DISPLAY }}>{h.ward}</div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: h.risk >= 85 ? C.red : C.amber }}>{h.risk}</div>
@@ -774,6 +996,7 @@ function AnalyticsCenter({ issues }) {
               <Pill color={C.amber}>{h.trend} predicted risk</Pill>
             </div>
           ))}
+          {(!currentStats.hotspots || currentStats.hotspots.length === 0) && <div style={{ color: C.textDim, fontSize: 12 }}>Gathering data...</div>}
         </div>
       </div>
     </div>
@@ -784,10 +1007,10 @@ function AnalyticsCenter({ issues }) {
    REPORT MODAL — Smart Submission with Live Duplicate Detection
 ═══════════════════════════════════════════════════════════ */
 function ReportModal({ issues, onClose, onSubmit }) {
-  const [form, setForm] = useState({ title: "", cat: "Road", loc: "", ward: "", desc: "" });
-  const [aiResult, setAiResult] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ title: "", cat: "", loc: "", ward: "", desc: "", imageBase64: null });
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const similarIssues = useMemo(() => {
@@ -798,83 +1021,98 @@ function ReportModal({ issues, onClose, onSubmit }) {
     ).slice(0, 2);
   }, [form.title, form.cat, form.loc, issues]);
 
-  const analyzeWithAI = async () => {
-    setAiLoading(true);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `You are a civic AI classifier. Analyze this grievance and respond ONLY with pure JSON (no markdown, no backticks):
-{
-  "severity": <1.0-10.0>,
-  "category": "<Road|Sanitation|Electricity|Water|Infrastructure|Fire|Other>",
-  "authority": "<specific department>",
-  "priority": "<Critical|High|Medium|Low>",
-  "civicScore": <0-100>,
-  "insight": "<concise 1-line action recommendation>",
-  "estimatedResolution": "<time estimate>",
-  "manpower": <number>,
-  "hashtag": "<suggested hashtag>",
-  "isSpam": false,
-  "riskIfDelayed": "<brief consequence>"
-}
-
-Issue: "${form.title}"
-Category hint: ${form.cat}
-Location: ${form.loc}
-Description: ${form.desc}` }]
-        })
-      });
-      const data = await res.json();
-      const text = data.content?.[0]?.text || "{}";
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-      setAiResult(parsed);
-      setStep(2);
-    } catch {
-      setAiResult({ severity: 5, category: form.cat, authority: "Municipal Corporation", priority: "Medium", civicScore: 45, insight: "Requires manual review", estimatedResolution: "3-5 days", manpower: 3, hashtag: `#CivicIssue`, isSpam: false, riskIfDelayed: "Service disruption" });
-      setStep(2);
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setImagePreview(URL.createObjectURL(file));
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setForm(prev => ({ ...prev, imageBase64: reader.result }));
+      };
+      reader.readAsDataURL(file);
     }
-    setAiLoading(false);
+  };
+
+  const handleLocation = () => {
+    setLocating(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setForm(p => ({ ...p, loc: `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}` }));
+          setLocating(false);
+        },
+        () => {
+          setForm(p => ({ ...p, loc: "Location access denied" }));
+          setLocating(false);
+        }
+      );
+    } else {
+      setForm(p => ({ ...p, loc: "Geolocation not supported" }));
+      setLocating(false);
+    }
   };
 
   const handleSubmit = () => {
     setSubmitted(true);
-    onSubmit(form, aiResult);
+    onSubmit(form);
   };
-
-  const priorityColor = { Critical: C.red, High: "#ff6b35", Medium: C.amber, Low: C.green };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{
-        background: C.bg1, border: `1px solid ${C.teal}44`, borderRadius: 20, width: "100%", maxWidth: 560,
+        background: C.bg1, border: `1px solid ${C.teal}44`, borderRadius: 20, width: "100%", maxWidth: 600,
         maxHeight: "92vh", overflowY: "auto", boxShadow: `0 0 80px ${C.teal}22`
       }}>
         {submitted ? (
           <div style={{ padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.green, fontFamily: FONT_DISPLAY }}>Issue Reported Successfully</div>
-            <div style={{ fontSize: 13, color: C.textSub, marginTop: 8 }}>AI classified & routed to {aiResult?.authority}. Track progress on the board.</div>
-            {aiResult && <div style={{ marginTop: 16 }}><Pill color={priorityColor[aiResult.priority] || C.amber}>{aiResult.priority} Priority · Civic Score: {aiResult.civicScore}</Pill></div>}
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.green, fontFamily: FONT_DISPLAY }}>Issue Submitted</div>
+            <div style={{ fontSize: 13, color: C.textSub, marginTop: 8 }}>AI is analyzing your report. It will appear on the dashboard shortly.</div>
             <button onClick={onClose} style={{ marginTop: 20, background: C.teal, border: "none", borderRadius: 10, padding: "10px 24px", color: "#000", fontWeight: 800, cursor: "pointer", fontSize: 13, fontFamily: FONT_DISPLAY }}>Close</button>
           </div>
         ) : (
           <>
             <div style={{ padding: "18px 22px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700 }}>SMART REPORT · STEP {step}/2</div>
-                <div style={{ fontSize: 16, fontWeight: 900, color: C.white, fontFamily: FONT_DISPLAY }}>{step === 1 ? "Describe the Issue" : "AI Assessment Complete"}</div>
+                <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700 }}>SMART REPORT</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: C.white, fontFamily: FONT_DISPLAY }}>Describe the Issue</div>
               </div>
               <button onClick={onClose} style={{ background: "none", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer" }}>✕</button>
             </div>
 
             <div style={{ padding: 22 }}>
-              {step === 1 && (
                 <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, color: C.textDim, letterSpacing: 2, fontWeight: 700, marginBottom: 6 }}>EVIDENCE (IMAGE)</label>
+                        <div style={{ 
+                            border: `1px dashed ${C.border}`, borderRadius: 10, height: 120, display: "flex", alignItems: "center", justifyContent: "center",
+                            background: imagePreview ? `url(${imagePreview}) center/cover` : C.bg2, position: "relative", overflow: "hidden"
+                        }}>
+                            {!imagePreview && <div style={{ textAlign: "center", color: C.textDim, fontSize: 11 }}>Drag & Drop or Click<br/>to Upload</div>}
+                            <input type="file" accept="image/*" onChange={handleImageUpload} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ display: "block", fontSize: 10, color: C.textDim, letterSpacing: 2, fontWeight: 700, marginBottom: 6 }}>LOCATION (AUTO-DETECT)</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <input value={form.loc} onChange={e => setForm(p => ({ ...p, loc: e.target.value }))} placeholder="Coordinates or Address" 
+                                style={{ flex: 1, background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px", color: C.text, fontSize: 12, outline: "none", fontFamily: FONT }} 
+                            />
+                            <button onClick={handleLocation} disabled={locating} style={{ background: C.bg2, border: `1px solid ${C.teal}`, borderRadius: 10, width: 40, color: C.teal, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {locating ? "..." : "📍"}
+                            </button>
+                        </div>
+                        <div style={{ fontSize: 10, color: C.textDim, marginTop: 6 }}>
+                            {locating ? "Triangulating..." : "Use GPS for higher accuracy"}
+                        </div>
+                    </div>
+                  </div>
+
                   {[
                     { label: "ISSUE TITLE", key: "title", placeholder: "e.g. Large pothole causing accidents" },
-                    { label: "LOCATION", key: "loc", placeholder: "e.g. 5th Cross, Indiranagar" },
                     { label: "WARD / AREA", key: "ward", placeholder: "e.g. Indiranagar" },
                   ].map(f => (
                     <div key={f.key} style={{ marginBottom: 14 }}>
@@ -886,22 +1124,6 @@ Description: ${form.desc}` }]
                       />
                     </div>
                   ))}
-
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ display: "block", fontSize: 10, color: C.textDim, letterSpacing: 2, fontWeight: 700, marginBottom: 8 }}>CATEGORY</label>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {["Road", "Sanitation", "Electricity", "Water", "Infrastructure", "Fire", "Other"].map(c => (
-                        <button key={c} onClick={() => setForm(p => ({ ...p, cat: c }))} style={{
-                          background: form.cat === c ? `${CAT_COLOR[c] || C.teal}22` : C.bg2,
-                          border: `1px solid ${form.cat === c ? (CAT_COLOR[c] || C.teal) : C.border}`,
-                          borderRadius: 20, padding: "6px 12px", fontSize: 11, fontWeight: form.cat === c ? 700 : 400,
-                          color: form.cat === c ? (CAT_COLOR[c] || C.teal) : C.textSub, cursor: "pointer", fontFamily: FONT
-                        }}>
-                          {CAT_ICON[c]} {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
 
                   <div style={{ marginBottom: 16 }}>
                     <label style={{ display: "block", fontSize: 10, color: C.textDim, letterSpacing: 2, fontWeight: 700, marginBottom: 6 }}>DESCRIPTION</label>
@@ -925,53 +1147,14 @@ Description: ${form.desc}` }]
                     </div>
                   )}
 
-                  <button onClick={analyzeWithAI} disabled={aiLoading || !form.title || !form.loc} style={{
-                    width: "100%", padding: "12px", background: aiLoading ? C.border : `linear-gradient(135deg, ${C.teal}, ${C.blue})`,
+                  <button onClick={handleSubmit} disabled={!form.title} style={{
+                    width: "100%", padding: "12px", background: !form.title ? C.border : `linear-gradient(135deg, ${C.teal}, ${C.blue})`,
                     border: "none", borderRadius: 12, color: "#000", fontSize: 14, fontWeight: 900,
-                    cursor: aiLoading || !form.title || !form.loc ? "not-allowed" : "pointer", fontFamily: FONT_DISPLAY, letterSpacing: 1
+                    cursor: !form.title ? "not-allowed" : "pointer", fontFamily: FONT_DISPLAY, letterSpacing: 1
                   }}>
-                    {aiLoading ? "⚙ AI ANALYZING..." : "🤖 ANALYZE & CONTINUE →"}
+                    SUBMIT REPORT
                   </button>
                 </>
-              )}
-
-              {step === 2 && aiResult && (
-                <>
-                  <div style={{ background: `${C.teal}0a`, border: `1px solid ${C.teal}33`, borderRadius: 12, padding: 16, marginBottom: 18 }}>
-                    <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700, marginBottom: 12 }}>🤖 AI CLASSIFICATION RESULT</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                      {[
-                        { label: "Severity", val: `${aiResult.severity}/10`, col: aiResult.severity >= 8 ? C.red : aiResult.severity >= 5 ? C.amber : C.green },
-                        { label: "Priority", val: aiResult.priority, col: priorityColor[aiResult.priority] },
-                        { label: "Civic Score", val: aiResult.civicScore, col: C.teal },
-                        { label: "Authority", val: aiResult.authority, col: C.blue },
-                        { label: "ETA", val: aiResult.estimatedResolution, col: C.textSub },
-                        { label: "Crew Needed", val: `${aiResult.manpower} people`, col: C.textSub },
-                      ].map(m => (
-                        <div key={m.label} style={{ background: C.bg2, borderRadius: 8, padding: "8px 10px" }}>
-                          <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 1 }}>{m.label}</div>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: m.col }}>{m.val}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ background: C.bg2, borderRadius: 8, padding: "8px 10px", marginBottom: 8 }}>
-                      <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 1, marginBottom: 2 }}>AI INSIGHT</div>
-                      <div style={{ fontSize: 12, color: C.teal }}>💡 {aiResult.insight}</div>
-                    </div>
-                    <div style={{ fontSize: 11, color: C.red }}>⚠ Risk if delayed: {aiResult.riskIfDelayed}</div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => setStep(1)} style={{ flex: 1, padding: "11px", background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 12, color: C.textSub, fontSize: 13, cursor: "pointer", fontFamily: FONT }}>← Edit</button>
-                    <button onClick={handleSubmit} style={{
-                      flex: 2, padding: "11px", background: `${C.green}22`, border: `1px solid ${C.green}`, borderRadius: 12,
-                      color: C.green, fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: FONT_DISPLAY, letterSpacing: 1
-                    }}>
-                      ✓ SUBMIT REPORT
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           </>
         )}
@@ -988,6 +1171,9 @@ function IssueDetailModal({ issue, onClose }) {
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const sm = STATUS_META[issue.status] || STATUS_META.Pending;
+  
+  const { score, breakdown } = calculateProgress(issue);
+  const slaUtilization = Math.min((issue.slaDone / issue.sla) * 100, 100);
 
   const timeline = [
     { label: "Complaint Filed", done: true, time: timeAgo(issue.timeMs) },
@@ -1000,25 +1186,21 @@ function IssueDetailModal({ issue, onClose }) {
 
   const askAI = async (prompt) => {
     setAiLoading(true); setAiText("");
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `Context: Civic issue in Bengaluru.
-Issue: "${issue.title}"
-Category: ${issue.cat}, Severity: ${issue.severity}/10, Civic Score: ${issue.civicScore}
-Location: ${issue.loc}, Authority: ${issue.authority}
-Progress: ${issue.progress}%, Social: ${issue.social} mentions
+    
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-${prompt}
+    let response = "";
+    if (prompt.includes("Predict")) {
+      response = `**📉 PREDICTION:** Based on historical data for ${issue.ward}, similar ${issue.cat} issues take avg ${issue.estHours}h to resolve. \n\n**BOTTLENECKS:**\n• Peak hour traffic on ${issue.loc}\n• Material availability for ${issue.authority}`;
+    } else if (prompt.includes("similar")) {
+      response = `**📚 PRECEDENT SEARCH:**\nFound 3 similar cases in past 90 days:\n1. Case #4921 (Resolved in 6h)\n2. Case #3321 (Resolved in 18h)\n3. Case #1102 (Resolved in 4h)\n\n**INSIGHT:** Faster resolution correlated with early morning dispatch.`;
+    } else if (prompt.includes("notice")) {
+      response = `**📢 DRAFT NOTICE:**\n"Attention Residents of ${issue.ward}: We are aware of the ${issue.cat} issue at ${issue.loc}. Crews have been dispatched. Expected resolution: ${issue.estHours} hours. Thank you for your patience."`;
+    } else {
+      response = `**💰 IMPACT ANALYSIS:**\n• Affected Population: ~2,500 households\n• Est. Economic Loss: ₹1.2 Lakhs/hour\n• Social Sentiment: Negative trending (-12%)\n\nRecommendation: Prioritize to prevent escalation.`;
+    }
 
-Be actionable, use emojis, max 150 words.` }]
-        })
-      });
-      const data = await res.json();
-      setAiText(data.content?.[0]?.text || "");
-    } catch { setAiText("AI unavailable."); }
+    setAiText(response);
     setAiLoading(false);
   };
 
@@ -1042,7 +1224,7 @@ Be actionable, use emojis, max 150 words.` }]
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer", alignSelf: "flex-start" }}>✕</button>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
-            {["overview", "timeline", "ai-intel"].map(t => (
+            {["overview", "timeline", "ai-intel", "evidence"].map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
                 background: tab === t ? `${sm.color}22` : "transparent", border: `1px solid ${tab === t ? sm.color : C.border}`,
                 borderRadius: 20, padding: "5px 14px", fontSize: 11, color: tab === t ? sm.color : C.textSub,
@@ -1070,14 +1252,26 @@ Be actionable, use emojis, max 150 words.` }]
                   </div>
                 ))}
               </div>
-              <div style={{ marginBottom: 12 }}>
+              
+              {/* Weighted Progress Bar */}
+              <div style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: C.textDim }}>Resolution Progress</span>
-                  <span style={{ fontSize: 12, color: sm.color, fontWeight: 700 }}>{issue.progress}%</span>
+                  <span style={{ fontSize: 11, color: C.textDim, fontWeight: 700, letterSpacing: 1 }}>RESOLUTION PROGRESS</span>
+                  <span style={{ fontSize: 14, color: sm.color, fontWeight: 700 }}>{score}%</span>
                 </div>
-                <ProgressBar value={issue.progress} color={sm.color} />
+                <ProgressBar value={score} color={sm.color} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                  {breakdown.map((step, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: step.done ? C.text : C.textDim }}>
+                      <span style={{ color: step.done ? C.green : C.border }}>{step.done ? "✔" : "○"}</span>
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <SLATimer sla={issue.sla} done={issue.slaDone} label="SLA ELAPSED" />
+
+              <SLATimer sla={issue.sla} done={issue.slaDone} label="SLA HEALTH (TIME PRESSURE)" />
+              
               <div style={{ marginTop: 14, background: `${C.teal}0a`, border: `1px solid ${C.teal}22`, borderRadius: 10, padding: 12 }}>
                 <div style={{ fontSize: 10, color: C.teal, letterSpacing: 2, fontWeight: 700, marginBottom: 4 }}>AI INSIGHT</div>
                 <div style={{ fontSize: 13, color: C.textSub }}>{issue.aiInsight}</div>
@@ -1130,6 +1324,10 @@ Be actionable, use emojis, max 150 words.` }]
               {!aiText && !aiLoading && <div style={{ textAlign: "center", padding: 32, color: C.textDim, fontSize: 13 }}>Select a question above to get AI-powered analysis</div>}
             </div>
           )}
+
+          {tab === "evidence" && (
+            <EvidencePanel evidence={issue.evidence || []} />
+          )}
         </div>
       </div>
     </div>
@@ -1141,6 +1339,36 @@ Be actionable, use emojis, max 150 words.` }]
 ═══════════════════════════════════════════════════════════ */
 const SIM_TITLES = ["Streetlight flickering", "Garbage pileup", "Water leakage", "Illegal parking", "Broken footpath", "Traffic signal dead", "Open drain danger"];
 const SIM_LOCS = ["HSR Layout", "BTM Layout", "Electronic City", "Marathahalli", "Bellandur", "Malleshwaram", "Rajajinagar"];
+
+const useSocialIntelligencePipeline = (enabled, setIssues, addToast) => {
+  useEffect(() => {
+    if (!enabled) return;
+    const interval = setInterval(() => {
+      // Simulate Multi-Agent Processing
+      setIssues(prev => prev.map(issue => {
+        if (Math.random() > 0.1) return issue; // Only update 10% of issues per tick
+        
+        // 1. Scraper Agent finds new mentions
+        const socialData = SocialScraperAgent.scan(issue.cat, issue.ward);
+        
+        // 2. NLP Agent updates severity based on text sentiment
+        const newSeverity = Math.min(10, issue.severity + (socialData.sentiment_score > 0.2 ? -0.1 : 0.1));
+        
+        // 3. Media Agent finds new evidence (simulated)
+        const newEvidence = Math.random() > 0.8 ? [...(issue.evidence || []), ...GENERATE_EVIDENCE(1)] : issue.evidence;
+
+        return { 
+          ...issue, 
+          social: issue.social + socialData.mentions,
+          severity: parseFloat(newSeverity.toFixed(1)),
+          evidence: newEvidence,
+          aiInsight: `Social Intelligence: Spike in ${socialData.hashtags[0]} mentions. Bot activity ${socialData.bot_activity_index > 0.1 ? "detected" : "low"}.`
+        };
+      }));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [enabled, setIssues]);
+};
 
 const useCivicSimulation = (enabled, setIssues, addToast) => {
   useEffect(() => {
@@ -1207,6 +1435,7 @@ export default function App() {
   }, []);
 
   useCivicSimulation(simEnabled, setIssues, addToast);
+  useSocialIntelligencePipeline(simEnabled, setIssues, addToast);
 
   const handleReport = (form, aiScore) => {
     const newIssue = {

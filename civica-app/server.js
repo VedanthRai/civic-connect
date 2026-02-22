@@ -5,6 +5,7 @@ import cors from 'cors';
 
 const app = express();
 app.use(cors());
+app.use(express.json({ limit: '50mb' }));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -12,13 +13,31 @@ const io = new Server(httpServer, {
 });
 
 // ═══════════════════════════════════════════════════════════
-// IN-MEMORY DATABASE (The "Source of Truth")
+// DATABASE ARCHITECTURE (Simulating PostgreSQL Tables)
 // ═══════════════════════════════════════════════════════════
-let ISSUES = [
-  { id: 1, title: "Pipeline burst — road flooding + traffic chaos", cat: "Water", loc: "Whitefield Main Rd", ward: "Whitefield", votes: 1847, severity: 9.8, status: "Critical", progress: 20, reports: 412, social: 8621, hashtag: "#WhitefieldFlood", authority: "BWSSB", sla: 2, slaDone: 0.4, timeMs: Date.now() - 1800000, recurrence: 3, lat: 12.9698, lng: 77.7500, aiInsight: "CRITICAL: Infrastructure failure. Emergency team required immediately.", trend: 892, manpower: 8, estHours: 6 },
-  { id: 2, title: "Massive pothole cluster causing daily accidents", cat: "Road", loc: "MG Road near Trinity Circle", ward: "Shivajinagar", votes: 1204, severity: 9.2, status: "In Progress", progress: 65, reports: 287, social: 5341, hashtag: "#MGRoadPothole", authority: "BBMP Roads", sla: 24, slaDone: 18, timeMs: Date.now() - 7200000, recurrence: 7, lat: 12.9762, lng: 77.6033, aiInsight: "High accident probability. Road closure + patching crew needed.", trend: 234, manpower: 6, estHours: 8 },
-  { id: 3, title: "Garbage overflow — 4 days uncollected, health risk", cat: "Sanitation", loc: "Koramangala 5th Block", ward: "Koramangala", votes: 912, severity: 8.7, status: "Assigned", progress: 30, reports: 198, social: 3876, hashtag: "#KoraGarbage", authority: "BBMP SWM", sla: 12, slaDone: 9, timeMs: Date.now() - 18000000, recurrence: 12, lat: 12.9352, lng: 77.6245, aiInsight: "Disease vector risk elevated. Dual vehicle dispatch needed.", trend: 67, manpower: 4, estHours: 3 },
+
+// 1. USERS TABLE
+let USERS = [
+  { id: 1, role: "citizen", name: "John Doe", email: "john@civica.app", department: null },
+  { id: 2, role: "authority", name: "Admin Officer", email: "admin@civica.gov", department: "BBMP" }
 ];
+
+// 2. ISSUES TABLE (Primary)
+let ISSUES = [
+  { id: 1, title: "Pipeline burst — road flooding + traffic chaos", cat: "Water", loc: "Whitefield Main Rd", ward: "Whitefield", votes: 1847, severity: 9.8, status: "Critical", progress: 20, reports: 412, social: 8621, hashtag: "#WhitefieldFlood", authority: "BWSSB", sla: 2, slaDone: 0.4, timeMs: Date.now() - 1800000, recurrence: 3, lat: 12.9698, lng: 77.7500, aiInsight: "CRITICAL: Infrastructure failure. Emergency team required immediately.", trend: 892, manpower: 8, estHours: 6, verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: true, geo_verified: true, ai_validation_score: 92, citizen_confirmed: false, classification_confidence: 0.95 },
+  { id: 2, title: "Massive pothole cluster causing daily accidents", cat: "Road", loc: "MG Road near Trinity Circle", ward: "Shivajinagar", votes: 1204, severity: 9.2, status: "In Progress", progress: 65, reports: 287, social: 5341, hashtag: "#MGRoadPothole", authority: "BBMP Roads", sla: 24, slaDone: 18, timeMs: Date.now() - 7200000, recurrence: 7, lat: 12.9762, lng: 77.6033, aiInsight: "High accident probability. Road closure + patching crew needed.", trend: 234, manpower: 6, estHours: 8, verified: true, assigned: true, dispatched: true, work_started: true, engineer_evidence: true, geo_verified: true, ai_validation_score: 85, citizen_confirmed: false, classification_confidence: 0.92 },
+  { id: 3, title: "Garbage overflow — 4 days uncollected, health risk", cat: "Sanitation", loc: "Koramangala 5th Block", ward: "Koramangala", votes: 912, severity: 8.7, status: "Assigned", progress: 30, reports: 198, social: 3876, hashtag: "#KoraGarbage", authority: "BBMP SWM", sla: 12, slaDone: 9, timeMs: Date.now() - 18000000, recurrence: 12, lat: 12.9352, lng: 77.6245, aiInsight: "Disease vector risk elevated. Dual vehicle dispatch needed.", trend: 67, manpower: 4, estHours: 3, verified: true, assigned: true, dispatched: true, work_started: false, engineer_evidence: false, geo_verified: false, ai_validation_score: 0, citizen_confirmed: false, classification_confidence: 0.88 },
+];
+
+// 3. MEDIA TABLE (Foreign Key -> Issue)
+let MEDIA = []; 
+
+// 4. ISSUE_STATUS_LOGS TABLE (Audit Trail)
+let ISSUE_STATUS_LOGS = [];
+
+// 5. ISSUE_ANALYTICS TABLE (Aggregated Stats - Option B)
+let ISSUE_ANALYTICS = [];
+
 let AGENT_LOGS = [];
 let SOCIAL_FEED = [];
 let CITY_STATS = {
@@ -26,7 +45,17 @@ let CITY_STATS = {
   risk: 15,
   active: 0,
   resolved: 0,
-  sentiment: { pos: 30, neu: 50, neg: 20 }
+  sentiment: { pos: 30, neu: 50, neg: 20 },
+  hotspots: []
+};
+
+// Helper: Join Tables for Frontend
+const getIssuesWithJoinedData = () => {
+  return ISSUES.map(issue => ({
+    ...issue,
+    evidence: MEDIA.filter(m => m.issue_id === issue.id),
+    analytics: ISSUE_ANALYTICS.find(a => a.issue_id === issue.id) || {}
+  }));
 };
 
 // Helper: Calculate Score
@@ -42,6 +71,139 @@ const calculateScore = (issue) => {
 
 // Initialize scores for seed data
 ISSUES = ISSUES.map(i => ({ ...i, civicScore: calculateScore(i) }));
+
+// ═══════════════════════════════════════════════════════════
+// API ROUTES
+// ═══════════════════════════════════════════════════════════
+app.get('/issues/:id/media', (req, res) => {
+  const media = MEDIA.filter(m => m.issue_id == req.params.id);
+  res.json(media);
+});
+
+app.post('/issues/:id/media', (req, res) => {
+  const issue = ISSUES.find(i => i.id == req.params.id);
+  if (!issue) return res.status(404).json({ error: "Issue not found" });
+  
+  const newMedia = {
+    id: Date.now(),
+    issue_id: parseInt(req.params.id),
+    ...req.body,
+    timestamp: new Date().toISOString(),
+    confidence: 1.0,
+    tags: ["user_upload"],
+    isFake: false,
+    botProb: 0
+  };
+  
+  MEDIA.unshift(newMedia);
+  
+  io.emit('update-issues', getIssuesWithJoinedData()); // Real-time sync with joined data
+  res.json(newMedia);
+});
+
+// ═══════════════════════════════════════════════════════════
+// AI CLASSIFICATION SERVICE (Gemini)
+// ═══════════════════════════════════════════════════════════
+const GEMINI_API_KEY = "AIzaSyClFa9eIFzzxaan8npTV2Hx0ckPzxFer6g";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+async function classifyIssueWithGemini(issue, imageBase64) {
+  const prompt = `You are a civic issue classifier. Analyze the following issue report.
+
+If an image is provided, prioritize visual evidence.
+Generate a clear, concise title (max 60 chars).
+Classify into one of: Road, Water, Electricity, Sanitation, Infrastructure, Garbage, Drainage, Streetlight, Public Safety, Other.
+Estimate severity: Low, Medium, High.
+
+Return strictly JSON:
+{
+"title": "...",
+"category": "...",
+"severity": "...",
+"confidence": 0.0-1.0,
+"reason": "short explanation"
+}
+
+Issue:
+Input Title: ${issue.title || "No title provided"}
+Description: ${issue.description || "No description provided"}
+Hashtags: ${issue.hashtag || ""}
+Location: ${issue.loc || "Unknown"}`;
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+    
+    // Clean markdown code blocks if present
+    const jsonStr = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error("Gemini Classification Failed", e);
+    return null;
+  }
+}
+
+async function generateEmbedding(text) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent?key=${GEMINI_API_KEY}`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "models/embedding-001",
+        content: { parts: [{ text: text }] }
+      })
+    });
+    const data = await response.json();
+    return data.embedding?.values || [];
+  } catch (e) { console.error("Embedding Failed", e); return []; }
+}
+
+// Geo & Vector Utils
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3; // meters
+  const φ1 = lat1 * Math.PI/180, φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180, Δλ = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2) * Math.sin(Δλ/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function cosineSimilarity(vecA, vecB) {
+  if (!vecA || !vecB || vecA.length !== vecB.length) return 0;
+  const dot = vecA.reduce((acc, v, i) => acc + v * vecB[i], 0);
+  const magA = Math.sqrt(vecA.reduce((acc, v) => acc + v*v, 0));
+  const magB = Math.sqrt(vecB.reduce((acc, v) => acc + v*v, 0));
+  return magA && magB ? dot / (magA * magB) : 0;
+}
+
+function checkForDuplicate(newIssue, classification) {
+  const [lat, lng] = newIssue.loc ? newIssue.loc.split(',').map(Number) : [0, 0];
+  if (!lat || !lng) return null;
+
+  return ISSUES.find(existing => {
+    const dist = getDistanceMeters(lat, lng, existing.lat, existing.lng);
+    
+    // Duplicate Logic:
+    // 1. Distance < 100m
+    // 2. Same Category
+    // 3. (Optional) Title similarity could be added here
+    
+    if (dist < 100 && existing.cat === classification.category) {
+      return true;
+    }
+    
+    return false;
+  });
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // MULTI-AGENT SYSTEM (The "Brain")
@@ -236,13 +398,48 @@ setInterval(() => {
 }, 2000);
 
 // ═══════════════════════════════════════════════════════════
+// BACKGROUND JOBS (Option B: Aggregated Analytics)
+// ═══════════════════════════════════════════════════════════
+setInterval(() => {
+  ISSUES.forEach(issue => {
+    const analytics = {
+      issue_id: issue.id,
+      upvotes_count: issue.votes,
+      duplicate_count: issue.reports,
+      social_reach: issue.social,
+      trend_score: issue.trend,
+      updated_at: new Date().toISOString()
+    };
+    const idx = ISSUE_ANALYTICS.findIndex(a => a.issue_id === issue.id);
+    if (idx >= 0) ISSUE_ANALYTICS[idx] = analytics;
+    else ISSUE_ANALYTICS.push(analytics);
+  });
+}, 5000);
+
+// BACKGROUND JOB: MIGRATION & RE-CLASSIFICATION
+setTimeout(async () => {
+  console.log("Running background classification migration...");
+  for (let issue of ISSUES) {
+    if (!issue.classification_confidence || issue.classification_confidence < 0.6) {
+      const result = await classifyIssueWithGemini(issue);
+      if (result) {
+        issue.cat = result.confidence < 0.5 ? "Uncategorized" : result.category;
+        issue.classification_confidence = result.confidence;
+        issue.aiInsight = result.reason;
+        if (result.confidence < 0.65) issue.status = "Needs Review";
+      }
+    }
+  }
+}, 10000);
+
+// ═══════════════════════════════════════════════════════════
 // SOCKET HANDLERS
 // ═══════════════════════════════════════════════════════════
 io.on('connection', (socket) => {
   console.log('Citizen connected:', socket.id);
   
   // Send initial state immediately
-  socket.emit('update-issues', ISSUES);
+  socket.emit('update-issues', getIssuesWithJoinedData());
   socket.emit('agent-log-history', AGENT_LOGS);
 
   socket.on('vote', (id) => {
@@ -250,24 +447,40 @@ io.on('connection', (socket) => {
     if (issue) {
       issue.votes++;
       issue.civicScore = calculateScore(issue);
-      io.emit('update-issues', ISSUES); // Broadcast to everyone
+      io.emit('update-issues', getIssuesWithJoinedData()); // Broadcast to everyone
     }
   });
 
   socket.on('report-issue', async (rawIssue) => {
     // Step 1: Receive
-    agents.log("GATEWAY", "RECEIVED", `New submission: ${rawIssue.title}`);
+    agents.log("GATEWAY", "RECEIVED", `New submission: ${rawIssue.title}. Status: Analyzing...`);
     
-    // Step 2: Triage Agent
-    let processedIssue = await agents.triageIssue(rawIssue);
+    // Step 2: Save immediately with temporary status
+    const tempIssue = {
+      ...rawIssue,
+      cat: "Analyzing...",
+      status: "Pending",
+      classification_confidence: 0,
+      aiInsight: "AI is analyzing this report..."
+    };
+    ISSUES.unshift(tempIssue);
+    io.emit('update-issues', getIssuesWithJoinedData());
+    io.emit('new-alert', { title: "New Issue Logged", msg: `${tempIssue.title} (Analyzing...)` });
     
-    // Step 3: Routing Agent
-    processedIssue = await agents.routeIssue(processedIssue);
-
-    // Step 4: Commit to DB
-    ISSUES.unshift(processedIssue);
-    io.emit('update-issues', ISSUES);
-    io.emit('new-alert', { title: "New Issue Logged", msg: `${processedIssue.title} (${processedIssue.status})` });
+    // Step 3: Call Gemini for Classification
+    const classification = await classifyIssueWithGemini(tempIssue);
+    
+    // Step 4: Update Issue
+    if (classification) {
+      tempIssue.cat = classification.confidence < 0.5 ? "Uncategorized" : classification.category;
+      tempIssue.classification_confidence = classification.confidence;
+      tempIssue.aiInsight = classification.reason;
+      if (classification.confidence < 0.65) tempIssue.status = "Needs Review";
+      
+      agents.log("AI_CLASSIFIER", "UPDATED", `Classified as ${tempIssue.cat} (${classification.confidence})`);
+    }
+    
+    io.emit('update-issues', getIssuesWithJoinedData());
   });
 
   socket.on('ask-ai-plan', async (issue) => {

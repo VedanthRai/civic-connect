@@ -36,6 +36,56 @@ const C = {
 const FONT = "'IBM Plex Mono', 'Courier New', monospace";
 const FONT_DISPLAY = "'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif";
 
+/* ═══════════════════════════════════════════════════════════
+   MULTI-AGENT SYSTEM ARCHITECTURE (Simulated)
+═══════════════════════════════════════════════════════════ */
+const SocialScraperAgent = {
+  name: "SocialPulse-V4",
+  scan: (keyword, geo) => ({
+    mentions: Math.floor(Math.random() * 150) + 20,
+    hashtags: [`#${keyword}`, "#BengaluruCivic", "#UrgentFix"],
+    sentiment_score: Math.random() * 0.8 - 0.4, // -0.4 to 0.4
+    bot_activity_index: Math.random() * 0.15
+  })
+};
+
+const NLPProcessorAgent = {
+  name: "CivicNLP-Transformer",
+  extractEntities: (text) => ["BBMP", "Whitefield", "Water Pipe"],
+  inferSeverity: (text) => text.includes("blood") || text.includes("fire") ? 9.5 : 6.0,
+  generateTags: (text) => ["infrastructure", "public_safety", "urgent"]
+};
+
+const MediaIntelligenceAgent = {
+  name: "VisionGuard-AI",
+  analyze: (mediaUrl) => ({
+    scene_classification: "Street/Urban",
+    object_detection: ["pothole", "vehicle", "pedestrian"],
+    severity_score: 0.8 + Math.random() * 0.2,
+    is_deepfake: Math.random() < 0.02, // 2% chance of fake
+    fingerprint: Math.random().toString(36).substring(7)
+  })
+};
+
+const GeoMappingAgent = {
+  name: "GeoSpatial-Cluster",
+  triangulate: (metadata, text) => ({
+    lat: 12.97 + (Math.random() * 0.01),
+    lng: 77.59 + (Math.random() * 0.01),
+    precision: "High (GPS)"
+  })
+};
+
+const MOCK_EVIDENCE_POOL = [
+  { type: "image", source: "Citizen Uploads", url: "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7", confidence: 0.98, tags: ["pothole", "hazard"], severity: 7.5, isFake: false, botProb: 0.01, timestamp: "2 mins ago" },
+  { type: "image", source: "Social Media", url: "https://images.unsplash.com/photo-1566041510639-8d95a2490bfb", confidence: 0.85, tags: ["traffic", "congestion"], severity: 6.2, isFake: false, botProb: 0.12, timestamp: "15 mins ago" },
+  { type: "video", source: "CCTV", url: "https://media.istockphoto.com/id/1182602838/video/cctv-camera-recording-traffic-on-the-road.mp4?s=mp4-640x640-is&k=20&c=J-jJ_y_y_y_y", confidence: 0.99, tags: ["vehicle", "motion"], severity: 9.0, isFake: false, botProb: 0.0, timestamp: "Live Stream" },
+  { type: "image", source: "Drone", url: "https://images.unsplash.com/photo-1473968512647-3e447244af8f", confidence: 0.92, tags: ["aerial", "flood"], severity: 8.8, isFake: false, botProb: 0.0, timestamp: "1 hour ago" },
+  { type: "image", source: "Social Media", url: "https://images.unsplash.com/photo-1599939571322-792a326991f2", confidence: 0.65, tags: ["fire", "smoke"], severity: 9.5, isFake: true, botProb: 0.95, timestamp: "Just now" }, // Fake/Bot example
+];
+
+const GENERATE_EVIDENCE = (count) => Array.from({ length: count }, () => MOCK_EVIDENCE_POOL[Math.floor(Math.random() * MOCK_EVIDENCE_POOL.length)]);
+
 const CIVICSCORE = (issue) => {
   const catWeight = { Water: 1.4, Road: 1.2, Sanitation: 1.3, Electricity: 1.35, Infrastructure: 1.25 }[issue.cat] || 1.0;
   const engBoost = Math.min(1 + (issue.votes / 500) * 0.3, 1.8);
@@ -129,6 +179,58 @@ function SLATimer({ sla, done, label }) {
 function PulsingAlert({ color }) {
   return (
     <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: color, boxShadow: `0 0 0 0 ${color}`, animation: "pulse-ring 1.4s ease infinite" }} />
+  );
+}
+
+function EvidencePanel({ evidence }) {
+  const [filter, setFilter] = useState("All");
+  const [hideBots, setHideBots] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  const filtered = evidence.filter(e => {
+    if (filter !== "All" && e.source !== filter) return false;
+    if (hideBots && e.botProb > 0.5) return false;
+    return true;
+  });
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={filter} onChange={e => setFilter(e.target.value)} style={{ background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 8px", fontSize: 11 }}>
+            <option value="All">All Sources</option>
+            <option value="Citizen Uploads">Citizen Uploads</option>
+            <option value="Social Media">Social Media</option>
+            <option value="CCTV">CCTV</option>
+            <option value="Drone">Drone</option>
+          </select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textDim, cursor: "pointer" }}>
+            <input type="checkbox" checked={hideBots} onChange={e => setHideBots(e.target.checked)} /> Hide Bot Content
+          </label>
+        </div>
+        <div style={{ fontSize: 10, color: C.teal }}>{filtered.length} items found</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
+        {filtered.map((item, i) => (
+          <div key={i} onClick={() => setExpanded(item)} style={{ background: C.bg2, borderRadius: 8, overflow: "hidden", border: `1px solid ${item.isFake ? C.red : C.border}`, cursor: "pointer", position: "relative" }}>
+            <div style={{ height: 90, background: `url(${item.url}) center/cover`, position: "relative" }}>
+              {item.type === "video" && <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.3)" }}>▶</div>}
+              {item.isFake && <div style={{ position: "absolute", top: 4, right: 4, background: C.red, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: "bold" }}>FAKE DETECTED</div>}
+            </div>
+            <div style={{ padding: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: C.textSub }}>{item.source}</span>
+                <span style={{ fontSize: 10, color: item.confidence > 0.9 ? C.green : C.amber }}>{(item.confidence * 100).toFixed(0)}% Conf</span>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {item.tags.slice(0, 2).map(t => <span key={t} style={{ fontSize: 9, background: `${C.blue}22`, color: C.blue, padding: "1px 4px", borderRadius: 4 }}>#{t}</span>)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1000,7 +1102,7 @@ function IssueDetailModal({ issue, onClose, onAsk, insightResult }) {
             <button onClick={onClose} style={{ background: "none", border: "none", color: C.textDim, fontSize: 20, cursor: "pointer", alignSelf: "flex-start" }}>✕</button>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 14, flexWrap: "wrap" }}>
-            {["overview", "timeline", "ai-intel"].map(t => (
+            {["overview", "timeline", "ai-intel", "evidence"].map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
                 background: tab === t ? `${sm.color}22` : "transparent", border: `1px solid ${tab === t ? sm.color : C.border}`,
                 borderRadius: 20, padding: "5px 14px", fontSize: 11, color: tab === t ? sm.color : C.textSub,
@@ -1087,6 +1189,10 @@ function IssueDetailModal({ issue, onClose, onAsk, insightResult }) {
               {aiText && !aiLoading && <div style={{ background: `${C.teal}0a`, border: `1px solid ${C.teal}22`, borderRadius: 10, padding: 14, fontSize: 13, color: C.textSub, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{aiText}</div>}
               {!aiText && !aiLoading && <div style={{ textAlign: "center", padding: 32, color: C.textDim, fontSize: 13 }}>Select a question above to get AI-powered analysis</div>}
             </div>
+          )}
+
+          {tab === "evidence" && (
+            <EvidencePanel evidence={issue.evidence || []} />
           )}
         </div>
       </div>
