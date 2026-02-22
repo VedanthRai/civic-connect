@@ -1195,6 +1195,7 @@ const useCivicSimulation = (enabled, setIssues, addToast) => {
 ═══════════════════════════════════════════════════════════ */
 export default function App() {
   const [section, setSection] = useState("citizen");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [issues, setIssues] = useState(ISSUES);
   const [simEnabled, setSimEnabled] = useState(true);
   const [toasts, setToasts] = useState([]);
@@ -1228,66 +1229,86 @@ export default function App() {
   ];
 
   return (
-    <div style={{ background: C.bg0, minHeight: "100vh", fontFamily: FONT, color: C.text }}>
+    <div style={{ 
+      background: C.bg0, 
+      height: "100vh", 
+      width: "100vw", 
+      display: "flex", 
+      flexDirection: "column", 
+      fontFamily: FONT, 
+      color: C.text,
+      overflow: "hidden" 
+    }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans+Condensed:wght@700;900&display=swap');
         @keyframes pulse-ring { 0%{box-shadow:0 0 0 0 currentColor} 70%{box-shadow:0 0 0 6px transparent} 100%{box-shadow:0 0 0 0 transparent} }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        
+        html, body, #root { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background: ${C.bg0}; }
+        * { box-sizing: border-box; outline: none; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: ${C.bg0}; }
-        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${C.borderHi}; }
+        
         input, textarea, select, button { font-family: inherit; }
         .fadeUp { animation: fadeUp 0.4s ease both; }
+        
+        .nav-item {
+          transition: all 0.2s ease;
+          border-left: 3px solid transparent;
+        }
+        .nav-item:hover {
+          background: ${C.bg2};
+        }
+        .nav-item.active {
+          background: ${C.bg2};
+          border-left-color: ${C.teal};
+          color: ${C.teal};
+        }
       `}</style>
 
       {/* Top Nav */}
       <header style={{
-        position: "sticky", top: 0, zIndex: 200,
-        background: `${C.bg0}ee`, backdropFilter: "blur(16px)",
-        borderBottom: `1px solid ${C.border}`, padding: "0 24px"
+        height: 60,
+        background: C.bg1,
+        borderBottom: `1px solid ${C.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 24px",
+        flexShrink: 0,
+        zIndex: 50
       }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 0, height: 56 }}>
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginRight: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 18, padding: 4 }}>
+            ☰
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
-              width: 34, height: 34, borderRadius: 10,
+              width: 32, height: 32, borderRadius: 8,
               background: `linear-gradient(135deg, ${C.teal}, ${C.blue})`,
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#000", fontWeight: 900, flexShrink: 0
             }}>⚡</div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 900, color: C.white, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>CIVICA</div>
-              <div style={{ fontSize: 8, color: C.textDim, letterSpacing: 3 }}>CIVIC INTELLIGENCE OS</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: C.white, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>CIVICA</div>
+              <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 2 }}>INTELLIGENCE OS</div>
             </div>
           </div>
+        </div>
 
-          {/* Sim Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button onClick={() => setSimEnabled(!simEnabled)} style={{
-            background: simEnabled ? `${C.red}22` : C.bg2, border: `1px solid ${simEnabled ? C.red : C.border}`,
-            borderRadius: 20, padding: "6px 12px", fontSize: 10, fontWeight: 700, color: simEnabled ? C.red : C.textDim,
-            cursor: "pointer", marginRight: 16, display: "flex", alignItems: "center", gap: 6
+            background: simEnabled ? `${C.green}22` : C.bg2, border: `1px solid ${simEnabled ? C.green : C.border}`,
+            borderRadius: 20, padding: "6px 12px", fontSize: 10, fontWeight: 700, color: simEnabled ? C.green : C.textDim,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 6
           }}>
-            <span style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: simEnabled ? C.red : C.textDim, boxShadow: simEnabled ? `0 0 8px ${C.red}` : "none" }} />
+            <span style={{ display: "block", width: 6, height: 6, borderRadius: "50%", background: simEnabled ? C.green : C.textDim, boxShadow: simEnabled ? `0 0 8px ${C.green}` : "none" }} />
             {simEnabled ? "LIVE FEED ON" : "FEED PAUSED"}
           </button>
-
-          {/* Nav tabs */}
-          <nav style={{ display: "flex", gap: 2, flex: 1 }}>
-            {navItems.map(n => (
-              <button key={n.id} onClick={() => setSection(n.id)} style={{
-                background: section === n.id ? `${C.teal}15` : "none",
-                border: "none", borderBottom: `2px solid ${section === n.id ? C.teal : "transparent"}`,
-                padding: "0 18px", height: 56, color: section === n.id ? C.teal : C.textDim,
-                fontSize: 11, fontWeight: section === n.id ? 700 : 400, cursor: "pointer",
-                letterSpacing: 1.5, transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6
-              }}>
-                <span>{n.icon}</span> {n.label}
-              </button>
-            ))}
-          </nav>
-
-          {/* Live indicator */}
+          <div style={{ width: 1, height: 24, background: C.border }} />
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.textDim }}>
             <PulsingAlert color={C.green} />
             <span style={{ color: C.green }}>LIVE</span>
@@ -1296,13 +1317,86 @@ export default function App() {
         </div>
       </header>
 
-      {/* Page content */}
-      <main style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 16px" }} className="fadeUp">
-        {section === "citizen" && <CitizenPortal issues={issues} onReport={handleReport} />}
-        {section === "authority" && <AuthorityDashboard issues={issues} />}
-        {section === "analytics" && <AnalyticsCenter issues={issues} />}
-        <ToastContainer toasts={toasts} />
-      </main>
+      {/* Main Workspace */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        
+        {/* Sidebar */}
+        <aside style={{
+          width: sidebarOpen ? 240 : 64,
+          background: C.bg1,
+          borderRight: `1px solid ${C.border}`,
+          transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          flexShrink: 0
+        }}>
+          <div style={{ flex: 1, padding: "16px 0" }}>
+            {navItems.map(n => (
+              <button key={n.id} onClick={() => setSection(n.id)} 
+                className={`nav-item ${section === n.id ? "active" : ""}`}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 20px",
+                  background: "none",
+                  border: "none",
+                  borderLeft: `3px solid ${section === n.id ? C.teal : "transparent"}`,
+                  color: section === n.id ? C.teal : C.textSub,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  textAlign: "left",
+                  height: 48
+                }}
+              >
+                <span style={{ fontSize: 18, minWidth: 24, textAlign: "center" }}>{n.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s", fontFamily: FONT_DISPLAY, letterSpacing: 1 }}>
+                  {n.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          
+          <div style={{ padding: 16, borderTop: `1px solid ${C.border}` }}>
+             <div style={{ display: "flex", alignItems: "center", gap: 10, opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.2s" }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.bg3, border: `1px solid ${C.border}` }} />
+                <div style={{ overflow: "hidden" }}>
+                   <div style={{ fontSize: 12, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>Admin User</div>
+                   <div style={{ fontSize: 10, color: C.textDim, whiteSpace: "nowrap" }}>Level 4 Access</div>
+                </div>
+             </div>
+          </div>
+        </aside>
+
+        {/* Content Area */}
+        <main style={{ 
+          flex: 1, 
+          overflowY: "auto", 
+          position: "relative",
+          background: `
+            radial-gradient(circle at 50% 0%, ${C.blueDim} 0%, transparent 40%),
+            radial-gradient(circle at 80% 80%, ${C.purpleDim} 0%, transparent 30%)
+          `
+        }}>
+          {/* Grid Overlay */}
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            backgroundImage: `linear-gradient(${C.border}22 1px, transparent 1px), linear-gradient(90deg, ${C.border}22 1px, transparent 1px)`,
+            backgroundSize: "40px 40px",
+            maskImage: "linear-gradient(to bottom, black 40%, transparent 100%)"
+          }} />
+
+          <div style={{ position: "relative", zIndex: 1, padding: "32px", minHeight: "100%" }}>
+             {section === "citizen" && <CitizenPortal issues={issues} onReport={handleReport} />}
+             {section === "authority" && <AuthorityDashboard issues={issues} />}
+             {section === "analytics" && <AnalyticsCenter issues={issues} />}
+          </div>
+        </main>
+      </div>
+      
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
